@@ -5,25 +5,37 @@ Evalute posibility to run KMP apps with WASM based plugins.
 
 | Component | Technology | Version | Link |
 |-----------|------------|---------|------|
-| WASM Runtime | Chasm | 1.2.1 | [GitHub](https://github.com/CharlieTap/chasm) |
+| WASM Runtime | Chasm | 1.3.1 | [GitHub](https://github.com/CharlieTap/chasm) |
 | Host Language | Kotlin Multiplatform | 2.3.0 | [kotlinlang.org](https://kotlinlang.org) |
-| Plugin Language | Rust | 1.75+ | [rust-lang.org](https://rust-lang.org) |
-| WASM Target | wasm32-unknown-unknown | - | - |
+| Build System | Gradle | 8.12 | [gradle.org](https://gradle.org) |
+| JVM Toolchain | Java | 21 | - |
 | Serialization | kotlinx.serialization | 1.7.3 | [GitHub](https://github.com/Kotlin/kotlinx.serialization) |
+| Plugin Language | Rust | 2021 edition | [rust-lang.org](https://rust-lang.org) |
+| WASM Target | wasm32-unknown-unknown | - | - |
 
 ## Architecture Overview
 
 ```mermaid
 graph TB
-    subgraph Application["tensor-eksplorer Application"]
+    subgraph Application["Host Application"]
         UI[UI Layer]
-        PS[PluginService]
         PE[PluginEngine]
+        WP[WasmPlugin]
+        MO[WasmMemoryOps]
+    end
+
+    subgraph API["Plugin API"]
+        PD[PluginDescriptor]
+        PI[PluginInput]
+        PO[PluginOutput]
+        PS[PluginSerializer]
     end
 
     subgraph Runtime["WASM Runtime"]
-        WR[WasmRuntime]
-        CH[Chasm 1.2.1]
+        CH[Chasm 1.3.1]
+        ST[Store]
+        IN[Instance]
+        MEM[Linear Memory]
     end
 
     subgraph Plugins["WASM Plugins"]
@@ -32,15 +44,25 @@ graph TB
         PN[custom-plugin.wasm]
     end
 
-    UI --> PS
-    PS --> PE
-    PE --> WR
-    WR --> CH
+    UI --> PE
+    PE --> WP
+    WP --> MO
+    WP --> PS
+    MO --> CH
+    PE --> PD
+    WP --> PI
+    WP --> PO
+
+    CH --> ST
+    ST --> IN
+    IN --> MEM
+
     CH --> P1
     CH --> P2
     CH --> PN
 
     style Application fill:#e1f5fe
+    style API fill:#f3e5f5
     style Runtime fill:#fff3e0
     style Plugins fill:#e8f5e9
 ```
@@ -49,58 +71,59 @@ graph TB
 
 ```mermaid
 graph LR
-    subgraph Modules
-        API[plugin-api]
-        ENGINE[plugin-engine]
-        APP[composeApp]
-    end
-
-    subgraph Types
-        PI[PluginInfo]
-        PIN[PluginInput]
+    subgraph plugin-api["plugin-api module"]
+        PD[PluginDescriptor]
+        PI[PluginInput]
         PO[PluginOutput]
+        WS[WeightStats]
+        SER[PluginSerializer]
     end
 
-    subgraph Runtime
-        WR[WasmRuntime]
-        WM[WasmModule]
+    subgraph plugin-engine["plugin-engine module"]
         PE[PluginEngine]
+        WP[WasmPlugin]
+        MO[WasmMemoryOps]
+        LL[PluginLifecycleListener]
+        EX[PluginException]
     end
 
-    API --> PI
-    API --> PIN
-    API --> PO
-    ENGINE --> WR
-    ENGINE --> WM
-    ENGINE --> PE
-    APP --> PS[PluginService]
+    subgraph chasm-test-cli["chasm-test-cli"]
+        CT[ChasmTest]
+    end
 
-    PS --> PE
-    PE --> WR
-    WR --> WM
+    PE --> PD
+    PE --> PI
+    PE --> PO
+    WP --> SER
+    PI --> WS
+    CT --> PE
+
+    style plugin-api fill:#f3e5f5
+    style plugin-engine fill:#e1f5fe
+    style chasm-test-cli fill:#fff3e0
 ```
 
 ### Directory Layout
 
 ```
-tensors-eKsplorer/
+wasm-plugin-system/
 ├── plugin-api/                          # Shared types (KMP)
 │   └── src/commonMain/kotlin/
 │       └── ai/skainet/eksplorer/plugin/
-│           ├── PluginInfo.kt            # Metadata type
+│           ├── PluginDescriptor.kt      # Plugin metadata
 │           ├── PluginInput.kt           # Recognition input
 │           ├── PluginOutput.kt          # Recognition output
+│           ├── WeightStats.kt           # Weight statistics
 │           └── PluginSerializer.kt      # JSON codec
 │
 ├── plugin-engine/                       # WASM runtime (KMP)
 │   └── src/commonMain/kotlin/
 │       └── ai/skainet/eksplorer/plugin/engine/
-│           ├── WasmRuntime.kt           # Chasm wrapper
-│           └── PluginEngine.kt          # Plugin manager
-│
-├── composeApp/                          # Desktop app
-│   └── src/jvmMain/kotlin/.../plugins/
-│       └── PluginService.kt             # App integration
+│           ├── PluginEngine.kt          # Plugin lifecycle manager
+│           ├── WasmPlugin.kt            # Single plugin instance
+│           ├── WasmMemoryOps.kt         # Low-level memory I/O
+│           ├── PluginLifecycleListener.kt # Load/unload callbacks
+│           └── PluginException.kt       # Typed error hierarchy
 │
 ├── rust-plugin-example/                 # Reference plugin
 │   ├── src/lib.rs
@@ -115,6 +138,159 @@ tensors-eKsplorer/
     └── minimal-plugin.wasm
 ```
 
+## Plugin API
+
+### Data Types
+
+```mermaid
+classDiagram
+    class PluginDescriptor {
+        +id: String
+        +name: String
+        +version: String
+        +description: String
+        +supportedFormats: List~String~
+        +metadata: Map~String,String~
+    }
+
+    class PluginInput {
+        +totalParams: Long
+        +layerCount: Int
+        +layerTypes: Map~String,Int~
+        +detectedBlocks: List~String~
+        +inputShape: List~Int~
+        +outputShapes: List~List~Int~~
+        +weightStats: WeightStats?
+        +format: String
+        +fileSizeBytes: Long
+        +embeddedMetadata: Map~String,String~
+    }
+
+    class PluginOutput {
+        +recognized: Boolean
+        +family: String?
+        +variant: String?
+        +task: String?
+        +confidence: Double
+        +metadata: Map~String,String~?
+    }
+
+    class WeightStats {
+        +mean: Double
+        +std: Double
+        +min: Double
+        +max: Double
+        +sparsity: Double
+    }
+
+    class PluginSerializer {
+        -json: Json
+        +encodeInput(PluginInput) String
+        +decodeOutput(String) PluginOutput
+        +decodeDescriptor(String) PluginDescriptor
+    }
+
+    PluginInput --> WeightStats
+    PluginSerializer ..> PluginInput : encodes
+    PluginSerializer ..> PluginOutput : decodes
+    PluginSerializer ..> PluginDescriptor : decodes
+```
+
+### Plugin Engine Classes
+
+```mermaid
+classDiagram
+    class PluginEngine {
+        -plugins: Map~String,WasmPlugin~
+        -listeners: List~PluginLifecycleListener~
+        +loadPlugin(bytes: ByteArray, sourceName: String) WasmPlugin
+        +unloadPlugin(id: String) Boolean
+        +unloadAll()
+        +getPlugin(id: String) WasmPlugin?
+        +getDescriptors() List~PluginDescriptor~
+        +recognizeFirst(input: PluginInput, format: String?) PluginOutput?
+        +recognizeAll(input: PluginInput) Map~String,PluginOutput~
+        +addLifecycleListener(listener: PluginLifecycleListener)
+        +removeLifecycleListener(listener: PluginLifecycleListener)
+    }
+
+    class WasmPlugin {
+        +descriptor: PluginDescriptor
+        +sourceName: String
+        +id: String
+        -store: Store
+        -instance: Instance
+        -memory: Memory
+        -hasOnUnload: Boolean
+        -disposed: Boolean
+        +recognize(input: PluginInput) PluginOutput
+        ~dispose()
+    }
+
+    class WasmMemoryOps {
+        <<internal object>>
+        +extractI32(ExecutionValue) Int
+        +invokeI32(Store, Instance, String, args) Int
+        +invokeVoid(Store, Instance, String, args)
+        +pluginAlloc(Store, Instance, size: Int) Int
+        +pluginDealloc(Store, Instance, ptr: Int, size: Int)
+        +readLengthPrefixed(Store, Memory, ptr: Int) String
+        +writeToMemory(Store, Memory, Instance, ByteArray) Pair~Int,Int~
+    }
+
+    class PluginLifecycleListener {
+        <<interface>>
+        +onPluginLoaded(PluginDescriptor)
+        +onPluginUnloaded(PluginDescriptor)
+        +onPluginLoadFailed(sourceName: String, PluginException)
+    }
+
+    class PluginException {
+        <<sealed>>
+    }
+    class ModuleDecodeError
+    class InstantiationError
+    class MissingExport
+    class InvocationError
+    class MemoryError
+    class DescriptorParseError
+    class DuplicatePluginError
+
+    PluginEngine --> WasmPlugin : manages
+    PluginEngine --> PluginLifecycleListener : notifies
+    WasmPlugin --> WasmMemoryOps : uses
+    PluginEngine ..> PluginException : throws
+
+    PluginException <|-- ModuleDecodeError
+    PluginException <|-- InstantiationError
+    PluginException <|-- MissingExport
+    PluginException <|-- InvocationError
+    PluginException <|-- MemoryError
+    PluginException <|-- DescriptorParseError
+    PluginException <|-- DuplicatePluginError
+```
+
+### Module Dependencies
+
+```mermaid
+graph BT
+    subgraph External
+        CHASM["chasm 1.3.1"]
+        KSJ["kotlinx-serialization-json 1.7.3"]
+    end
+
+    API["plugin-api"] --> KSJ
+    ENGINE["plugin-engine"] --> API
+    ENGINE --> CHASM
+    ENGINE --> KSJ
+    CLI["chasm-test-cli"] --> ENGINE
+
+    style External fill:#fff3e0
+    style API fill:#f3e5f5
+    style ENGINE fill:#e1f5fe
+    style CLI fill:#fff3e0
+```
+
 ## Data Flow
 
 ### Plugin Loading Sequence
@@ -122,91 +298,135 @@ tensors-eKsplorer/
 ```mermaid
 sequenceDiagram
     participant App as Application
-    participant PS as PluginService
     participant PE as PluginEngine
-    participant WR as WasmRuntime
+    participant MO as WasmMemoryOps
     participant CH as Chasm
+    participant WP as WasmPlugin
     participant WM as WASM Module
 
-    App->>PS: initialize()
-    PS->>PS: scan plugins directory
+    App->>PE: loadPlugin(bytes, sourceName)
+    PE->>CH: store()
+    CH-->>PE: Store
+    PE->>CH: module(bytes)
+    CH-->>PE: Module
+    PE->>CH: instance(store, module, [])
+    CH-->>PE: Instance
+    PE->>CH: exports(instance)
+    CH-->>PE: [memory, functions...]
 
-    loop For each .wasm file
-        PS->>PE: loadPlugin(name, bytes)
-        PE->>WR: loadModule(bytes)
-        WR->>CH: module(bytes)
-        CH-->>WR: Module
-        WR->>CH: instance(store, module)
-        CH-->>WR: Instance
-        WR->>CH: exports(instance)
-        CH-->>WR: [memory, functions...]
-        WR-->>PE: WasmModule
+    PE->>PE: validate required exports
 
-        PE->>WM: getPluginInfo()
-        WM->>CH: invoke("plugin_info")
-        CH-->>WM: ptr (i32)
-        WM->>CH: readInt(ptr)
-        CH-->>WM: length
-        WM->>CH: readBytes(ptr+4, length)
-        CH-->>WM: JSON bytes
-        WM-->>PE: PluginInfo
-
-        PE-->>PS: PluginInfo
+    opt on_load present
+        PE->>MO: invokeVoid(store, instance, "on_load")
+        MO->>CH: invoke("on_load")
+        CH->>WM: on_load()
     end
 
-    PS-->>App: plugins loaded
+    PE->>MO: invokeI32(store, instance, "plugin_info")
+    MO->>CH: invoke("plugin_info")
+    CH->>WM: plugin_info()
+    WM-->>CH: ptr (i32)
+    CH-->>MO: ptr
+    PE->>MO: readLengthPrefixed(store, memory, ptr)
+    MO->>CH: readInt(ptr)
+    CH-->>MO: length
+    MO->>CH: readBytes(ptr+4, length)
+    CH-->>MO: JSON bytes
+    MO-->>PE: JSON string
+
+    PE->>PE: PluginSerializer.decodeDescriptor(json)
+    PE->>PE: check duplicate ID
+
+    PE->>WP: create WasmPlugin(descriptor, store, instance, memory)
+    PE->>PE: notify listeners: onPluginLoaded()
+    PE-->>App: WasmPlugin
 ```
 
 ### Model Recognition Flow
 
 ```mermaid
 sequenceDiagram
-    participant UI as UI Layer
-    participant PS as PluginService
+    participant Caller
     participant PE as PluginEngine
-    participant WM as WasmModule
+    participant WP as WasmPlugin
+    participant SER as PluginSerializer
+    participant MO as WasmMemoryOps
     participant CH as Chasm
     participant Plugin as WASM Plugin
 
-    UI->>PS: recognize(format, tensors)
-    PS->>PS: createPluginInput()
-    PS->>PE: recognize(input)
+    Caller->>PE: recognizeFirst(input, format)
+    PE->>PE: filter plugins by format
 
-    loop For each loaded plugin
-        PE->>WM: recognize(input)
+    loop For each candidate plugin
+        PE->>WP: recognize(input)
 
-        Note over WM,Plugin: Memory Write
-        WM->>WM: serialize to JSON
-        WM->>CH: invoke("plugin_alloc", size)
+        WP->>SER: encodeInput(input)
+        SER-->>WP: JSON string
+
+        Note over WP,Plugin: Memory Write
+        WP->>MO: writeToMemory(store, memory, instance, jsonBytes)
+        MO->>MO: pluginAlloc(store, instance, size)
+        MO->>CH: invoke("plugin_alloc", size)
         CH->>Plugin: plugin_alloc(size)
         Plugin-->>CH: ptr
-        CH-->>WM: ptr
-        WM->>CH: writeInt(ptr, length)
-        WM->>CH: writeBytes(ptr+4, json)
+        CH-->>MO: ptr
+        MO->>CH: writeBytes(memory, ptr, data)
+        MO-->>WP: (ptr, len)
 
-        Note over WM,Plugin: Function Call
-        WM->>CH: invoke("recognize", ptr, len)
+        Note over WP,Plugin: Function Call
+        WP->>MO: invokeI32(store, instance, "recognize", [ptr, len])
+        MO->>CH: invoke("recognize", ptr, len)
         CH->>Plugin: recognize(ptr, len)
         Plugin->>Plugin: parse JSON input
         Plugin->>Plugin: run recognition logic
         Plugin->>Plugin: serialize output
         Plugin-->>CH: result_ptr
-        CH-->>WM: result_ptr
+        CH-->>MO: result_ptr
+        MO-->>WP: result_ptr
 
-        Note over WM,Plugin: Memory Read
-        WM->>CH: readInt(result_ptr)
-        CH-->>WM: length
-        WM->>CH: readBytes(result_ptr+4, length)
-        CH-->>WM: JSON bytes
-        WM->>WM: deserialize output
+        Note over WP,Plugin: Memory Read
+        WP->>MO: readLengthPrefixed(store, memory, result_ptr)
+        MO->>CH: readInt(result_ptr)
+        CH-->>MO: length
+        MO->>CH: readBytes(result_ptr+4, length)
+        CH-->>MO: JSON bytes
+        MO-->>WP: JSON string
 
-        WM-->>PE: PluginOutput
+        WP->>SER: decodeOutput(json)
+        SER-->>WP: PluginOutput
+        WP-->>PE: PluginOutput
 
         alt recognized == true
-            PE-->>PS: RecognitionResult
-            PS-->>UI: result
+            PE-->>Caller: PluginOutput
         end
     end
+```
+
+### Plugin Unload Flow
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant PE as PluginEngine
+    participant WP as WasmPlugin
+    participant MO as WasmMemoryOps
+    participant CH as Chasm
+    participant WM as WASM Module
+
+    App->>PE: unloadPlugin(id)
+    PE->>PE: remove from plugins map
+    PE->>WP: dispose()
+
+    opt on_unload present
+        WP->>MO: invokeVoid(store, instance, "on_unload")
+        MO->>CH: invoke("on_unload")
+        CH->>WM: on_unload()
+        Note over WP: best-effort, errors swallowed
+    end
+
+    WP->>WP: disposed = true
+    PE->>PE: notify listeners: onPluginUnloaded()
+    PE-->>App: true
 ```
 
 ## Memory Exchange Protocol
@@ -238,35 +458,37 @@ Offset    0    1    2    3    4    5    6    7   ...   N+3
           (little-endian)
 ```
 
+Max payload size: 1,000,000 bytes (enforced by `WasmMemoryOps.readLengthPrefixed`).
+
 ### Host ↔ Plugin Communication
 
 ```mermaid
 flowchart LR
     subgraph Host["Host (Kotlin)"]
-        H1[Serialize to JSON]
-        H2[Call plugin_alloc]
-        H3[Write length + data]
-        H4[Invoke function]
-        H5[Read result pointer]
-        H6[Read length + data]
-        H7[Deserialize JSON]
+        H1[PluginSerializer.encodeInput]
+        H2[WasmMemoryOps.writeToMemory]
+        H3[pluginAlloc via Chasm]
+        H4[writeBytes via Chasm]
+        H5[invokeI32 'recognize']
+        H6[readLengthPrefixed]
+        H7[PluginSerializer.decodeOutput]
     end
 
     subgraph Plugin["Plugin (WASM)"]
         P1[plugin_alloc]
         P2[Linear Memory]
-        P3[recognize/plugin_info]
-        P4[Write result]
+        P3[recognize]
+        P4[Write result to memory]
     end
 
     H1 --> H2
-    H2 --> P1
+    H2 --> H3
+    H3 --> P1
     P1 --> P2
-    H3 --> P2
-    H4 --> P3
+    H4 --> P2
+    H5 --> P3
     P3 --> P4
     P4 --> P2
-    H5 --> P2
     H6 --> P2
     H6 --> H7
 ```
@@ -285,75 +507,42 @@ classDiagram
         +recognize(ptr: i32, len: i32) i32
     }
 
+    class OptionalExports {
+        <<optional>>
+        +on_load()
+        +on_unload()
+    }
+
     class Memory {
         <<linear memory>>
         data: bytes
     }
 
     WASMPlugin --> Memory : exports
+    WASMPlugin .. OptionalExports : may export
 ```
 
-| Export | Signature | Description |
-|--------|-----------|-------------|
-| `memory` | `Memory` | Linear memory for data exchange |
-| `plugin_alloc` | `(i32) -> i32` | Allocate N bytes, return pointer |
-| `plugin_dealloc` | `(i32, i32) -> void` | Free memory at ptr with size |
-| `plugin_info` | `() -> i32` | Return pointer to JSON metadata |
-| `recognize` | `(i32, i32) -> i32` | Process input, return result pointer |
-
-### Data Types
-
-```mermaid
-classDiagram
-    class PluginInfo {
-        +name: String
-        +version: String
-        +description: String
-        +supportedFormats: List~String~
-    }
-
-    class PluginInput {
-        +totalParams: Long
-        +layerCount: Int
-        +layerTypes: Map~String,Int~
-        +detectedBlocks: List~String~
-        +inputShape: List~Int~
-        +outputShapes: List~List~Int~~
-        +weightStats: WeightStats
-        +format: String
-        +fileSizeBytes: Long
-        +embeddedMetadata: Map~String,String~
-    }
-
-    class PluginOutput {
-        +recognized: Boolean
-        +family: String?
-        +variant: String?
-        +task: String?
-        +confidence: Float
-        +metadata: Map~String,String~?
-    }
-
-    class WeightStats {
-        +mean: Float
-        +std: Float
-        +min: Float
-        +max: Float
-        +sparsity: Float
-    }
-
-    PluginInput --> WeightStats
-```
+| Export | Signature | Required | Description |
+|--------|-----------|----------|-------------|
+| `memory` | `Memory` | Yes | Linear memory for data exchange |
+| `plugin_alloc` | `(i32) -> i32` | Yes | Allocate N bytes, return pointer |
+| `plugin_dealloc` | `(i32, i32) -> void` | Yes | Free memory at ptr with size |
+| `plugin_info` | `() -> i32` | Yes | Return pointer to JSON metadata |
+| `recognize` | `(i32, i32) -> i32` | Yes | Process input, return result pointer |
+| `on_load` | `() -> void` | No | Called when plugin is loaded |
+| `on_unload` | `() -> void` | No | Called when plugin is unloaded (best-effort) |
 
 ### JSON Examples
 
-**PluginInfo:**
+**PluginDescriptor:**
 ```json
 {
+  "id": "minimal-rust-plugin",
   "name": "Minimal Rust Plugin",
   "version": "0.1.0",
   "description": "A minimal example plugin written in Rust",
-  "supportedFormats": ["onnx", "gguf"]
+  "supportedFormats": ["onnx", "gguf"],
+  "metadata": {}
 }
 ```
 
@@ -385,39 +574,115 @@ classDiagram
 }
 ```
 
+### Error Handling
+
+```mermaid
+classDiagram
+    class PluginException {
+        <<sealed>>
+        +message: String
+        +cause: Throwable?
+    }
+
+    class ModuleDecodeError {
+        Failed to decode WASM bytes
+    }
+    class InstantiationError {
+        Failed to create instance
+    }
+    class MissingExport {
+        Required export not found
+    }
+    class InvocationError {
+        Error calling WASM function
+    }
+    class MemoryError {
+        Memory read/write failed
+    }
+    class DescriptorParseError {
+        Invalid plugin_info JSON
+    }
+    class DuplicatePluginError {
+        Plugin ID already loaded
+    }
+
+    PluginException <|-- ModuleDecodeError
+    PluginException <|-- InstantiationError
+    PluginException <|-- MissingExport
+    PluginException <|-- InvocationError
+    PluginException <|-- MemoryError
+    PluginException <|-- DescriptorParseError
+    PluginException <|-- DuplicatePluginError
+```
+
 ## Usage
 
 ### Loading Plugins
 
 ```kotlin
-// Initialize on app startup
-PluginService.initialize()
+val engine = PluginEngine()
 
-// Or load from custom directory
-PluginService.initialize(File("/path/to/plugins"))
+// Register lifecycle listener
+engine.addLifecycleListener(object : PluginLifecycleListener {
+    override fun onPluginLoaded(descriptor: PluginDescriptor) {
+        println("Loaded: ${descriptor.name} v${descriptor.version}")
+    }
+    override fun onPluginUnloaded(descriptor: PluginDescriptor) {
+        println("Unloaded: ${descriptor.id}")
+    }
+    override fun onPluginLoadFailed(sourceName: String, error: PluginException) {
+        println("Failed to load $sourceName: ${error.message}")
+    }
+})
+
+// Load a plugin from bytes
+val wasmBytes = File("plugins/minimal-plugin.wasm").readBytes()
+val plugin = engine.loadPlugin(wasmBytes, "minimal-plugin.wasm")
 
 // Check loaded plugins
-val plugins = PluginService.getLoadedPlugins()
-plugins.forEach { (name, info) ->
-    println("${info.name} v${info.version}")
+engine.getDescriptors().forEach { desc ->
+    println("${desc.id}: ${desc.name} v${desc.version}")
+    println("  Formats: ${desc.supportedFormats}")
 }
 ```
 
 ### Running Recognition
 
 ```kotlin
-// From model analysis
-val result = PluginService.recognize(
-    format = ModelFormat.ONNX,
-    tensors = analyzedTensors,
-    metadata = modelMetadata
+val input = PluginInput(
+    totalParams = 3_200_000,
+    layerCount = 225,
+    layerTypes = mapOf("Conv" to 53, "BatchNorm" to 52, "SiLU" to 51),
+    detectedBlocks = listOf("C2f", "SPPF", "Detect"),
+    inputShape = listOf(1, 3, 640, 640),
+    outputShapes = listOf(listOf(1, 84, 8400)),
+    format = "onnx",
+    fileSizeBytes = 6_500_000,
 )
 
+// First match (filtered by format)
+val result = engine.recognizeFirst(input, format = "onnx")
 if (result != null && result.recognized) {
     println("Detected: ${result.family} ${result.variant}")
     println("Task: ${result.task}")
     println("Confidence: ${result.confidence}")
 }
+
+// Or get results from all plugins
+val allResults = engine.recognizeAll(input)
+allResults.forEach { (pluginId, output) ->
+    println("$pluginId: recognized=${output.recognized}")
+}
+```
+
+### Unloading Plugins
+
+```kotlin
+// Unload a single plugin (calls on_unload if exported)
+engine.unloadPlugin("minimal-rust-plugin")
+
+// Unload all plugins
+engine.unloadAll()
 ```
 
 ### Building a Plugin
@@ -463,8 +728,8 @@ graph LR
 
 **Solution:** Implemented length-prefixed protocol with manual memory management:
 - `plugin_alloc` / `plugin_dealloc` for memory
-- `writeInt` + `writeBytes` for writing
-- `readInt` + `readBytes` for reading
+- `writeBytes` / `readBytes` for data transfer
+- `readInt` for length prefix
 
 ### 3. Memory API Discovery
 
@@ -474,7 +739,6 @@ graph LR
 ```kotlin
 import io.github.charlietap.chasm.embedding.memory.readInt
 import io.github.charlietap.chasm.embedding.memory.readBytes
-import io.github.charlietap.chasm.embedding.memory.writeInt
 import io.github.charlietap.chasm.embedding.memory.writeBytes
 ```
 
@@ -538,4 +802,4 @@ wasm-objdump -x plugin.wasm | grep -i kotlin
 
 ---
 
-*Last updated: 2025-01-25 | Plugin System v1.0.0*
+*Last updated: 2025-01-27 | Plugin System v1.1.0*
