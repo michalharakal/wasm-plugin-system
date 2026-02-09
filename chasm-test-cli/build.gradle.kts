@@ -12,7 +12,7 @@ repositories {
 }
 
 dependencies {
-    implementation("io.github.charlietap.chasm:chasm:1.3.1")
+    implementation(project(":plugin-engine"))
 }
 
 application {

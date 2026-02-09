@@ -46,9 +46,15 @@ fn read_input(ptr: i32, len: i32) -> String {
 
 #[no_mangle]
 pub extern "C" fn plugin_info() -> i32 {
-    let json = r#"{"name":"Minimal Rust Plugin","version":"0.1.0","description":"A minimal example plugin written in Rust","supportedFormats":["onnx","gguf"]}"#;
+    let json = r#"{"id":"minimal-rust-plugin","name":"Minimal Rust Plugin","version":"0.1.0","description":"A minimal example plugin written in Rust","supportedFormats":["onnx","gguf"],"metadata":{}}"#;
     write_length_prefixed(json)
 }
+
+#[no_mangle]
+pub extern "C" fn on_load() {}
+
+#[no_mangle]
+pub extern "C" fn on_unload() {}
 
 #[no_mangle]
 pub extern "C" fn recognize(ptr: i32, len: i32) -> i32 {
