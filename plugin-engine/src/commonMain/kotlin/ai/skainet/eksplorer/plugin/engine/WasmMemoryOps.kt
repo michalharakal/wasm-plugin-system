@@ -65,7 +65,7 @@ internal object WasmMemoryOps {
                 throw PluginException.MemoryError("Failed to read $length bytes at ptr=${ptr + 4}: ${bytesResult.error}")
         }
 
-        return String(buffer, Charsets.UTF_8)
+        return buffer.decodeToString()
     }
 
     fun writeToMemory(store: Store, memory: Memory, instance: Instance, data: ByteArray): Pair<Int, Int> {

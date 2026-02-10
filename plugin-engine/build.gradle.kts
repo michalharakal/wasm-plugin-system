@@ -6,6 +6,14 @@ plugins {
 kotlin {
     jvmToolchain(21)
     jvm()
+    macosArm64()
+    macosX64()
+    iosArm64()
+    iosSimulatorArm64()
+    iosX64()
+    linuxArm64()
+    linuxX64()
+    mingwX64()
 
     sourceSets {
         commonMain {

@@ -25,7 +25,7 @@ class WasmPlugin internal constructor(
         check(!disposed) { "Plugin '$id' has been disposed" }
 
         val inputJson = PluginSerializer.encodeInput(input)
-        val inputBytes = inputJson.toByteArray(Charsets.UTF_8)
+        val inputBytes = inputJson.encodeToByteArray()
 
         val (ptr, len) = WasmMemoryOps.writeToMemory(store, memory, instance, inputBytes)
 
