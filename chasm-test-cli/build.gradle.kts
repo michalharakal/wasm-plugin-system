@@ -18,3 +18,7 @@ dependencies {
 application {
     mainClass.set("ChasmTestKt")
 }
+
+tasks.named<JavaExec>("run") {
+    workingDir = rootProject.projectDir
+}

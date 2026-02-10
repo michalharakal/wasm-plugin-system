@@ -3,21 +3,21 @@ plugins {
     kotlin("plugin.serialization") version "2.3.0"
 }
 
+repositories {
+    mavenCentral()
+}
+
 @OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
 kotlin {
-    jvmToolchain(21)
-    jvm()
-    wasmWasi()
+    wasmWasi {
+        binaries.executable()
+    }
 
     sourceSets {
-        commonMain {
+        wasmWasiMain {
             dependencies {
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+                implementation(project(":plugin-api"))
             }
         }
     }
-}
-
-repositories {
-    mavenCentral()
 }

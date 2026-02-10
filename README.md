@@ -10,8 +10,8 @@ Evalute posibility to run KMP apps with WASM based plugins.
 | Build System | Gradle | 8.12 | [gradle.org](https://gradle.org) |
 | JVM Toolchain | Java | 21 | - |
 | Serialization | kotlinx.serialization | 1.7.3 | [GitHub](https://github.com/Kotlin/kotlinx.serialization) |
-| Plugin Language | Rust | 2021 edition | [rust-lang.org](https://rust-lang.org) |
-| WASM Target | wasm32-unknown-unknown | - | - |
+| Plugin Language | Kotlin/WASM | 2.3.0 | [kotlinlang.org](https://kotlinlang.org/docs/wasm-overview.html) |
+| Reference Plugin | Rust | 2021 edition | [rust-lang.org](https://rust-lang.org) |
 
 ## Architecture Overview
 
@@ -703,26 +703,7 @@ cp my-plugin.wasm ~/.tensor-eksplorer/plugins/
 
 ## Lessons Learned
 
-### 1. Kotlin/WASM Incompatibility
-
-```mermaid
-graph LR
-    K[Kotlin/WASM] -->|uses| GC[WasmGC Instructions]
-    GC -->|byte 0x06| X[DecodeError]
-    R[Rust wasm32] -->|standard| W[WASM 1.0]
-    W -->|compatible| CH[Chasm]
-
-    style X fill:#ffcdd2
-    style CH fill:#c8e6c9
-```
-
-**Problem:** Plugins compiled with Kotlin/WASM fail with `DecodeError(UnknownInstruction(byte=6))`.
-
-**Cause:** Kotlin/WASM uses WasmGC proposal instructions that Chasm cannot decode.
-
-**Solution:** Use Rust with `wasm32-unknown-unknown` target.
-
-### 2. No Built-in String Passing
+### 1. No Built-in String Passing
 
 **Problem:** Chasm has no high-level API for passing strings between host and guest.
 
@@ -731,7 +712,7 @@ graph LR
 - `writeBytes` / `readBytes` for data transfer
 - `readInt` for length prefix
 
-### 3. Memory API Discovery
+### 2. Memory API Discovery
 
 **Problem:** Chasm memory APIs not documented.
 
@@ -742,7 +723,7 @@ import io.github.charlietap.chasm.embedding.memory.readBytes
 import io.github.charlietap.chasm.embedding.memory.writeBytes
 ```
 
-### 4. Java Version Mismatch
+### 3. Java Version Mismatch
 
 **Problem:** `UnsupportedClassVersionError` across modules.
 

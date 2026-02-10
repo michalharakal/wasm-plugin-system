@@ -30,8 +30,8 @@ class PluginEngine {
             }
         }
 
-        // 3. Instantiate
-        val inst = when (val result = instance(pluginStore, mod, emptyList())) {
+        // 3. Instantiate (with WASI stubs for Kotlin/WASM compatibility)
+        val inst = when (val result = instance(pluginStore, mod, WasiStubs.createImports(pluginStore))) {
             is ChasmResult.Success -> result.result
             is ChasmResult.Error -> {
                 val ex = PluginException.InstantiationError(result.error.toString())
@@ -57,7 +57,12 @@ class PluginEngine {
         val hasOnLoad = "on_load" in exportNames
         val hasOnUnload = "on_unload" in exportNames
 
-        // 5. Call on_load() if present
+        // 5. Call _initialize() if present (required by Kotlin/WASM runtime)
+        if ("_initialize" in exportNames) {
+            WasmMemoryOps.invokeVoid(pluginStore, inst, "_initialize")
+        }
+
+        // 7. Call on_load() if present
         if (hasOnLoad) {
             try {
                 WasmMemoryOps.invokeVoid(pluginStore, inst, "on_load")
@@ -68,7 +73,7 @@ class PluginEngine {
             }
         }
 
-        // 6. Call plugin_info() and parse descriptor
+        // 8. Call plugin_info() and parse descriptor
         val descriptor: PluginDescriptor
         try {
             val infoPtr = WasmMemoryOps.invokeI32(pluginStore, inst, "plugin_info")
@@ -83,14 +88,14 @@ class PluginEngine {
             throw ex
         }
 
-        // 7. Check for duplicate ID
+        // 9. Check for duplicate ID
         if (descriptor.id in plugins) {
             val ex = PluginException.DuplicatePluginError(descriptor.id)
             notifyLoadFailed(sourceName, ex)
             throw ex
         }
 
-        // 8. Register plugin, notify listeners
+        // 10. Register plugin, notify listeners
         val plugin = WasmPlugin(
             descriptor = descriptor,
             sourceName = sourceName,

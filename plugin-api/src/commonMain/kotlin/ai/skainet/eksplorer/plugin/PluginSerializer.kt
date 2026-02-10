@@ -17,4 +17,13 @@ object PluginSerializer {
 
     fun decodeDescriptor(raw: String): PluginDescriptor =
         json.decodeFromString(PluginDescriptor.serializer(), raw)
+
+    fun encodeDescriptor(descriptor: PluginDescriptor): String =
+        json.encodeToString(PluginDescriptor.serializer(), descriptor)
+
+    fun encodeOutput(output: PluginOutput): String =
+        json.encodeToString(PluginOutput.serializer(), output)
+
+    fun decodeInput(raw: String): PluginInput =
+        json.decodeFromString(PluginInput.serializer(), raw)
 }
