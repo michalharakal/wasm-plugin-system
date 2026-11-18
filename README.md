@@ -5,13 +5,13 @@ Evalute posibility to run KMP apps with WASM based plugins.
 
 | Component | Technology | Version | Link |
 |-----------|------------|---------|------|
-| WASM Runtime | Chasm | 1.3.1 | [GitHub](https://github.com/CharlieTap/chasm) |
-| Host Language | Kotlin Multiplatform | 2.3.0 | [kotlinlang.org](https://kotlinlang.org) |
-| Build System | Gradle | 8.12 | [gradle.org](https://gradle.org) |
+| WASM Runtime | Chasm | 2.5.0 | [GitHub](https://github.com/CharlieTap/chasm) |
+| Host Language | Kotlin Multiplatform | 2.4.21 | [kotlinlang.org](https://kotlinlang.org) |
+| Build System | Gradle | 9.9.1 | [gradle.org](https://gradle.org) |
 | JVM Toolchain | Java | 21 | - |
-| Serialization | kotlinx.serialization | 1.7.3 | [GitHub](https://github.com/Kotlin/kotlinx.serialization) |
-| Plugin Language | Kotlin/WASM | 2.3.0 | [kotlinlang.org](https://kotlinlang.org/docs/wasm-overview.html) |
-| Reference Plugin | Rust | 2021 edition | [rust-lang.org](https://rust-lang.org) |
+| Serialization | kotlinx.serialization | 1.13.0 | [GitHub](https://github.com/Kotlin/kotlinx.serialization) |
+| Plugin Language | Kotlin/WASM | 2.4.21 | [kotlinlang.org](https://kotlinlang.org/docs/wasm-overview.html) |
+| Reference Plugin | Rust | 2024 edition | [rust-lang.org](https://rust-lang.org) |
 
 ## Architecture Overview
 
@@ -32,7 +32,7 @@ graph TB
     end
 
     subgraph Runtime["WASM Runtime"]
-        CH[Chasm 1.3.1]
+        CH[Chasm 2.5.0]
         ST[Store]
         IN[Instance]
         MEM[Linear Memory]
@@ -275,8 +275,8 @@ classDiagram
 ```mermaid
 graph BT
     subgraph External
-        CHASM["chasm 1.3.1"]
-        KSJ["kotlinx-serialization-json 1.7.3"]
+        CHASM["chasm 2.5.0"]
+        KSJ["kotlinx-serialization-json 1.13.0"]
     end
 
     API["plugin-api"] --> KSJ
@@ -783,4 +783,4 @@ wasm-objdump -x plugin.wasm | grep -i kotlin
 
 ---
 
-*Last updated: 2025-01-27 | Plugin System v1.1.0*
+*Last updated: 2026-11-18 | Plugin System v1.1.0*
