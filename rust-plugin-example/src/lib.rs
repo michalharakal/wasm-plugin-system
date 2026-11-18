@@ -3,13 +3,13 @@ use std::slice;
 
 // ─── Memory management ───
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn plugin_alloc(size: i32) -> i32 {
     let layout = Layout::from_size_align(size as usize, 1).unwrap();
     unsafe { alloc(layout) as i32 }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn plugin_dealloc(ptr: i32, size: i32) {
     let layout = Layout::from_size_align(size as usize, 1).unwrap();
     unsafe { dealloc(ptr as *mut u8, layout) }
@@ -44,19 +44,19 @@ fn read_input(ptr: i32, len: i32) -> String {
 
 // ─── Plugin exports ───
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn plugin_info() -> i32 {
     let json = r#"{"id":"minimal-rust-plugin","name":"Minimal Rust Plugin","version":"0.1.0","description":"A minimal example plugin written in Rust","supportedFormats":["onnx","gguf"],"metadata":{}}"#;
     write_length_prefixed(json)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn on_load() {}
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn on_unload() {}
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn recognize(ptr: i32, len: i32) -> i32 {
     let input = read_input(ptr, len);
 

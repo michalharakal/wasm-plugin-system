@@ -1,16 +1,14 @@
 plugins {
-    kotlin("multiplatform") version "2.3.0"
-    kotlin("plugin.serialization") version "2.3.0"
+    kotlin("multiplatform") version "2.4.21"
+    kotlin("plugin.serialization") version "2.4.21"
 }
 
 kotlin {
     jvmToolchain(21)
     jvm()
     macosArm64()
-    macosX64()
     iosArm64()
     iosSimulatorArm64()
-    iosX64()
     linuxArm64()
     linuxX64()
     mingwX64()
@@ -19,8 +17,8 @@ kotlin {
         commonMain {
             dependencies {
                 api(project(":plugin-api"))
-                implementation("io.github.charlietap.chasm:chasm:1.3.1")
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+                implementation("io.github.charlietap.chasm:chasm:2.5.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.13.0")
             }
         }
     }

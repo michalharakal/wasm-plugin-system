@@ -3,7 +3,7 @@ package ai.skainet.eksplorer.plugin.engine
 import io.github.charlietap.chasm.embedding.dsl.imports
 import io.github.charlietap.chasm.embedding.shapes.Import
 import io.github.charlietap.chasm.embedding.shapes.Store
-import io.github.charlietap.chasm.runtime.value.NumberValue
+import io.github.charlietap.chasm.host.writeI32
 
 internal object WasiStubs {
 
@@ -16,98 +16,98 @@ internal object WasiStubs {
             moduleName = MODULE
             entityName = "fd_write"
             type { params { i32(); i32(); i32(); i32() }; results { i32() } }
-            reference { _ -> listOf(NumberValue.I32(0)) }
+            reference { _, results -> results.writeI32(0, 0) }
         }
 
         function {
             moduleName = MODULE
             entityName = "fd_close"
             type { params { i32() }; results { i32() } }
-            reference { _ -> listOf(NumberValue.I32(0)) }
+            reference { _, results -> results.writeI32(0, 0) }
         }
 
         function {
             moduleName = MODULE
             entityName = "fd_seek"
             type { params { i32(); i64(); i32(); i32() }; results { i32() } }
-            reference { _ -> listOf(NumberValue.I32(0)) }
+            reference { _, results -> results.writeI32(0, 0) }
         }
 
         function {
             moduleName = MODULE
             entityName = "fd_read"
             type { params { i32(); i32(); i32(); i32() }; results { i32() } }
-            reference { _ -> listOf(NumberValue.I32(0)) }
+            reference { _, results -> results.writeI32(0, 0) }
         }
 
         function {
             moduleName = MODULE
             entityName = "fd_fdstat_get"
             type { params { i32(); i32() }; results { i32() } }
-            reference { _ -> listOf(NumberValue.I32(0)) }
+            reference { _, results -> results.writeI32(0, 0) }
         }
 
         function {
             moduleName = MODULE
             entityName = "random_get"
             type { params { i32(); i32() }; results { i32() } }
-            reference { _ -> listOf(NumberValue.I32(0)) }
+            reference { _, results -> results.writeI32(0, 0) }
         }
 
         function {
             moduleName = MODULE
             entityName = "clock_time_get"
             type { params { i32(); i64(); i32() }; results { i32() } }
-            reference { _ -> listOf(NumberValue.I32(0)) }
+            reference { _, results -> results.writeI32(0, 0) }
         }
 
         function {
             moduleName = MODULE
             entityName = "proc_exit"
             type { params { i32() }; results { } }
-            reference { _ -> emptyList() }
+            reference { _, _ -> }
         }
 
         function {
             moduleName = MODULE
             entityName = "environ_sizes_get"
             type { params { i32(); i32() }; results { i32() } }
-            reference { _ -> listOf(NumberValue.I32(0)) }
+            reference { _, results -> results.writeI32(0, 0) }
         }
 
         function {
             moduleName = MODULE
             entityName = "environ_get"
             type { params { i32(); i32() }; results { i32() } }
-            reference { _ -> listOf(NumberValue.I32(0)) }
+            reference { _, results -> results.writeI32(0, 0) }
         }
 
         function {
             moduleName = MODULE
             entityName = "args_sizes_get"
             type { params { i32(); i32() }; results { i32() } }
-            reference { _ -> listOf(NumberValue.I32(0)) }
+            reference { _, results -> results.writeI32(0, 0) }
         }
 
         function {
             moduleName = MODULE
             entityName = "args_get"
             type { params { i32(); i32() }; results { i32() } }
-            reference { _ -> listOf(NumberValue.I32(0)) }
+            reference { _, results -> results.writeI32(0, 0) }
         }
 
         function {
             moduleName = MODULE
             entityName = "fd_prestat_get"
             type { params { i32(); i32() }; results { i32() } }
-            reference { _ -> listOf(NumberValue.I32(EBADF)) }
+            reference { _, results -> results.writeI32(0, EBADF) }
         }
 
         function {
             moduleName = MODULE
             entityName = "fd_prestat_dir_name"
             type { params { i32(); i32(); i32() }; results { i32() } }
-            reference { _ -> listOf(NumberValue.I32(EBADF)) }
+            reference { _, results -> results.writeI32(0, EBADF) }
         }
     }
 }
